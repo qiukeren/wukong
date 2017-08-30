@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"github.com/huichen/wukong/types"
+	"github.com/qiukeren/wukong/types"
 	"sync/atomic"
 )
 
@@ -14,14 +14,14 @@ type indexerLookupRequest struct {
 	countDocsOnly       bool
 	tokens              []string
 	labels              []string
-	docIds              map[uint64]bool
+	docIds              map[string]bool
 	options             types.RankOptions
 	rankerReturnChannel chan rankerReturnRequest
 	orderless           bool
 }
 
 type indexerRemoveDocRequest struct {
-	docId       uint64
+	docId       string
 	forceUpdate bool
 }
 
@@ -44,7 +44,7 @@ func (engine *Engine) indexerRemoveDocWorker(shard int) {
 	for {
 		request := <-engine.indexerRemoveDocChannels[shard]
 		engine.indexers[shard].RemoveDocumentToCache(request.docId, request.forceUpdate)
-		if request.docId != 0 {
+		if request.docId != "" {
 			atomic.AddUint64(&engine.numDocumentsRemoved, 1)
 		}
 		if request.forceUpdate {

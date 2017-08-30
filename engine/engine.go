@@ -1,13 +1,12 @@
 package engine
 
 import (
-	"fmt"
 	"github.com/huichen/murmur"
 	"github.com/huichen/sego"
-	"github.com/huichen/wukong/core"
-	"github.com/huichen/wukong/storage"
-	"github.com/huichen/wukong/types"
-	"github.com/huichen/wukong/utils"
+	"github.com/qiukeren/wukong/core"
+	"github.com/qiukeren/wukong/storage"
+	"github.com/qiukeren/wukong/types"
+	"github.com/qiukeren/wukong/utils"
 	"log"
 	"os"
 	"runtime"
@@ -227,28 +226,28 @@ func (engine *Engine) Init(options types.EngineInitOptions) {
 //      1. 这个函数是线程安全的，请尽可能并发调用以提高索引速度
 //      2. 这个函数调用是非同步的，也就是说在函数返回时有可能文档还没有加入索引中，因此
 //         如果立刻调用Search可能无法查询到这个文档。强制刷新索引请调用FlushIndex函数。
-func (engine *Engine) IndexDocument(docId uint64, data types.DocumentIndexData, forceUpdate bool) {
+func (engine *Engine) IndexDocument(docId string, data types.DocumentIndexData, forceUpdate bool) {
 	engine.internalIndexDocument(docId, data, forceUpdate)
 
-	hash := murmur.Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.initOptions.PersistentStorageShards)
-	if engine.initOptions.UsePersistentStorage && docId != 0 {
+	hash := murmur.Murmur3([]byte(docId)) % uint32(engine.initOptions.PersistentStorageShards)
+	if engine.initOptions.UsePersistentStorage && docId != "" {
 		engine.persistentStorageIndexDocumentChannels[hash] <- persistentStorageIndexDocumentRequest{docId: docId, data: data}
 	}
 }
 
 func (engine *Engine) internalIndexDocument(
-	docId uint64, data types.DocumentIndexData, forceUpdate bool) {
+	docId string, data types.DocumentIndexData, forceUpdate bool) {
 	if !engine.initialized {
 		log.Fatal("必须先初始化引擎")
 	}
 
-	if docId != 0 {
+	if docId != "" {
 		atomic.AddUint64(&engine.numIndexingRequests, 1)
 	}
 	if forceUpdate {
 		atomic.AddUint64(&engine.numForceUpdatingRequests, 1)
 	}
-	hash := murmur.Murmur3([]byte(fmt.Sprint("%d%s", docId, data.Content)))
+	hash := murmur.Murmur3([]byte(docId + data.Content))
 	engine.segmenterChannel <- segmenterRequest{
 		docId: docId, hash: hash, data: data, forceUpdate: forceUpdate}
 }
@@ -263,12 +262,12 @@ func (engine *Engine) internalIndexDocument(
 //      1. 这个函数是线程安全的，请尽可能并发调用以提高索引速度
 //      2. 这个函数调用是非同步的，也就是说在函数返回时有可能文档还没有加入索引中，因此
 //         如果立刻调用Search可能无法查询到这个文档。强制刷新索引请调用FlushIndex函数。
-func (engine *Engine) RemoveDocument(docId uint64, forceUpdate bool) {
+func (engine *Engine) RemoveDocument(docId string, forceUpdate bool) {
 	if !engine.initialized {
 		log.Fatal("必须先初始化引擎")
 	}
 
-	if docId != 0 {
+	if docId != "" {
 		atomic.AddUint64(&engine.numRemovingRequests, 1)
 	}
 	if forceUpdate {
@@ -276,15 +275,15 @@ func (engine *Engine) RemoveDocument(docId uint64, forceUpdate bool) {
 	}
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		engine.indexerRemoveDocChannels[shard] <- indexerRemoveDocRequest{docId: docId, forceUpdate: forceUpdate}
-		if docId == 0 {
+		if docId == "" {
 			continue
 		}
 		engine.rankerRemoveDocChannels[shard] <- rankerRemoveDocRequest{docId: docId}
 	}
 
-	if engine.initOptions.UsePersistentStorage && docId != 0 {
+	if engine.initOptions.UsePersistentStorage && docId != "" {
 		// 从数据库中删除
-		hash := murmur.Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.initOptions.PersistentStorageShards)
+		hash := murmur.Murmur3([]byte(docId)) % uint32(engine.initOptions.PersistentStorageShards)
 		go engine.persistentStorageRemoveDocumentWorker(docId, hash)
 	}
 }
@@ -421,7 +420,7 @@ func (engine *Engine) FlushIndex() {
 		}
 	}
 	// 强制更新，保证其为最后的请求
-	engine.IndexDocument(0, types.DocumentIndexData{}, true)
+	engine.IndexDocument("", types.DocumentIndexData{}, true)
 	for {
 		runtime.Gosched()
 		if engine.numForceUpdatingRequests*uint64(engine.initOptions.NumShards) == engine.numDocumentsForceUpdated {

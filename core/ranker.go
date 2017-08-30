@@ -1,8 +1,8 @@
 package core
 
 import (
-	"github.com/huichen/wukong/types"
-	"github.com/huichen/wukong/utils"
+	"github.com/qiukeren/wukong/types"
+	"github.com/qiukeren/wukong/utils"
 	"log"
 	"sort"
 	"sync"
@@ -11,8 +11,8 @@ import (
 type Ranker struct {
 	lock struct {
 		sync.RWMutex
-		fields map[uint64]interface{}
-		docs   map[uint64]bool
+		fields map[string]interface{}
+		docs   map[string]bool
 	}
 	initialized bool
 }
@@ -23,12 +23,12 @@ func (ranker *Ranker) Init() {
 	}
 	ranker.initialized = true
 
-	ranker.lock.fields = make(map[uint64]interface{})
-	ranker.lock.docs = make(map[uint64]bool)
+	ranker.lock.fields = make(map[string]interface{})
+	ranker.lock.docs = make(map[string]bool)
 }
 
 // 给某个文档添加评分字段
-func (ranker *Ranker) AddDoc(docId uint64, fields interface{}) {
+func (ranker *Ranker) AddDoc(docId string, fields interface{}) {
 	if ranker.initialized == false {
 		log.Fatal("排序器尚未初始化")
 	}
@@ -40,7 +40,7 @@ func (ranker *Ranker) AddDoc(docId uint64, fields interface{}) {
 }
 
 // 删除某个文档的评分字段
-func (ranker *Ranker) RemoveDoc(docId uint64) {
+func (ranker *Ranker) RemoveDoc(docId string) {
 	if ranker.initialized == false {
 		log.Fatal("排序器尚未初始化")
 	}

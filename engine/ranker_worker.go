@@ -1,11 +1,11 @@
 package engine
 
 import (
-	"github.com/huichen/wukong/types"
+	"github.com/qiukeren/wukong/types"
 )
 
 type rankerAddDocRequest struct {
-	docId  uint64
+	docId  string
 	fields interface{}
 }
 
@@ -22,7 +22,7 @@ type rankerReturnRequest struct {
 }
 
 type rankerRemoveDocRequest struct {
-	docId uint64
+	docId string
 }
 
 func (engine *Engine) rankerAddDocWorker(shard int) {

@@ -13,7 +13,7 @@ type SearchRequest struct {
 	Labels []string
 
 	// 当不为nil时，仅从这些DocIds包含的键中搜索（忽略值）
-	DocIds map[uint64]bool
+	DocIds map[string]bool
 
 	// 排序选项
 	RankOptions *RankOptions

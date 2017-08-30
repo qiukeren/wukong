@@ -6,8 +6,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/huichen/wukong/types"
-	"github.com/huichen/wukong/utils"
+	"github.com/qiukeren/wukong/types"
+	"github.com/qiukeren/wukong/utils"
 )
 
 // 索引器
@@ -17,7 +17,7 @@ type Indexer struct {
 	tableLock struct {
 		sync.RWMutex
 		table     map[string]*KeywordIndices
-		docsState map[uint64]int // nil: 表示无状态记录，0: 存在于索引中，1: 等待删除，2: 等待加入
+		docsState map[string]int // nil: 表示无状态记录，0: 存在于索引中，1: 等待删除，2: 等待加入
 	}
 	addCacheLock struct {
 		sync.RWMutex
@@ -40,13 +40,13 @@ type Indexer struct {
 	totalTokenLength float32
 
 	// 每个文档的关键词长度
-	docTokenLengths map[uint64]float32
+	docTokenLengths map[string]float32
 }
 
 // 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
 type KeywordIndices struct {
 	// 下面的切片是否为空，取决于初始化时IndexType的值
-	docIds      []uint64  // 全部类型都有
+	docIds      []string  // 全部类型都有
 	frequencies []float32 // IndexType == FrequenciesIndex
 	locations   [][]int   // IndexType == LocationsIndex
 }
@@ -61,14 +61,14 @@ func (indexer *Indexer) Init(options types.IndexerInitOptions) {
 	indexer.initialized = true
 
 	indexer.tableLock.table = make(map[string]*KeywordIndices)
-	indexer.tableLock.docsState = make(map[uint64]int)
+	indexer.tableLock.docsState = make(map[string]int)
 	indexer.addCacheLock.addCache = make([]*types.DocumentIndex, indexer.initOptions.DocCacheSize)
-	indexer.removeCacheLock.removeCache = make([]uint64, indexer.initOptions.DocCacheSize*2)
-	indexer.docTokenLengths = make(map[uint64]float32)
+	indexer.removeCacheLock.removeCache = make([]string, indexer.initOptions.DocCacheSize*2)
+	indexer.docTokenLengths = make(map[string]float32)
 }
 
 // 从KeywordIndices中得到第i个文档的DocId
-func (indexer *Indexer) getDocId(ti *KeywordIndices, i int) uint64 {
+func (indexer *Indexer) getDocId(ti *KeywordIndices, i int) string {
 	return ti.docIds[i]
 }
 
@@ -116,7 +116,7 @@ func (indexer *Indexer) AddDocumentToCache(document *types.DocumentIndex, forceU
 		}
 
 		indexer.tableLock.Unlock()
-		if indexer.RemoveDocumentToCache(0, forceUpdate) {
+		if indexer.RemoveDocumentToCache("", forceUpdate) {
 			// 只有当存在于索引表中的文档已被删除，其才可以重新加入到索引表中
 			position = 0
 		}
@@ -171,7 +171,7 @@ func (indexer *Indexer) AddDocuments(documents *types.DocumentsIndex) {
 				case types.FrequenciesIndex:
 					ti.frequencies = []float32{keyword.Frequency}
 				}
-				ti.docIds = []uint64{document.DocId}
+				ti.docIds = []string{document.DocId}
 				indexer.tableLock.table[keyword.Text] = &ti
 				continue
 			}
@@ -190,7 +190,7 @@ func (indexer *Indexer) AddDocuments(documents *types.DocumentsIndex) {
 				copy(indices.frequencies[position+1:], indices.frequencies[position:])
 				indices.frequencies[position] = keyword.Frequency
 			}
-			indices.docIds = append(indices.docIds, 0)
+			indices.docIds = append(indices.docIds, "")
 			copy(indices.docIds[position+1:], indices.docIds[position:])
 			indices.docIds[position] = document.DocId
 		}
@@ -205,13 +205,13 @@ func (indexer *Indexer) AddDocuments(documents *types.DocumentsIndex) {
 
 // 向 REMOVECACHE 中加入一个待删除文档
 // 返回值表示文档是否在索引表中被删除
-func (indexer *Indexer) RemoveDocumentToCache(docId uint64, forceUpdate bool) bool {
+func (indexer *Indexer) RemoveDocumentToCache(docId string, forceUpdate bool) bool {
 	if indexer.initialized == false {
 		log.Fatal("索引器尚未初始化")
 	}
 
 	indexer.removeCacheLock.Lock()
-	if docId != 0 {
+	if docId != "" {
 		indexer.tableLock.Lock()
 		if docState, ok := indexer.tableLock.docsState[docId]; ok && docState == 0 {
 			indexer.removeCacheLock.removeCache[indexer.removeCacheLock.removeCachePointer] = docId
@@ -303,7 +303,7 @@ func (indexer *Indexer) RemoveDocuments(documents *types.DocumentsId) {
 // 查找包含全部搜索键(AND操作)的文档
 // 当docIds不为nil时仅从docIds指定的文档中查找
 func (indexer *Indexer) Lookup(
-	tokens []string, labels []string, docIds map[uint64]bool, countDocsOnly bool) (docs []types.IndexedDocument, numDocs int) {
+	tokens []string, labels []string, docIds map[string]bool, countDocsOnly bool) (docs []types.IndexedDocument, numDocs int) {
 	if indexer.initialized == false {
 		log.Fatal("索引器尚未初始化")
 	}
@@ -455,7 +455,7 @@ func (indexer *Indexer) Lookup(
 // 第一个返回参数为找到的位置或需要插入的位置
 // 第二个返回参数标明是否找到
 func (indexer *Indexer) searchIndex(
-	indices *KeywordIndices, start int, end int, docId uint64) (int, bool) {
+	indices *KeywordIndices, start int, end int, docId string) (int, bool) {
 	// 特殊情况
 	if indexer.getIndexLength(indices) == start {
 		return start, false

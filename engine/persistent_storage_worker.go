@@ -2,24 +2,19 @@ package engine
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/gob"
-	"github.com/huichen/wukong/types"
+	"github.com/qiukeren/wukong/types"
 	"sync/atomic"
 )
 
 type persistentStorageIndexDocumentRequest struct {
-	docId uint64
+	docId string
 	data  types.DocumentIndexData
 }
 
 func (engine *Engine) persistentStorageIndexDocumentWorker(shard int) {
 	for {
 		request := <-engine.persistentStorageIndexDocumentChannels[shard]
-
-		// 得到key
-		b := make([]byte, 10)
-		length := binary.PutUvarint(b, request.docId)
 
 		// 得到value
 		var buf bytes.Buffer
@@ -29,27 +24,26 @@ func (engine *Engine) persistentStorageIndexDocumentWorker(shard int) {
 			atomic.AddUint64(&engine.numDocumentsStored, 1)
 			continue
 		}
-
+		b := []byte(request.docId)
 		// 将key-value写入数据库
-		engine.dbs[shard].Set(b[0:length], buf.Bytes())
+		engine.dbs[shard].Set(b, buf.Bytes())
 		atomic.AddUint64(&engine.numDocumentsStored, 1)
 	}
 }
 
-func (engine *Engine) persistentStorageRemoveDocumentWorker(docId uint64, shard uint32) {
+func (engine *Engine) persistentStorageRemoveDocumentWorker(docId string, shard uint32) {
 	// 得到key
-	b := make([]byte, 10)
-	length := binary.PutUvarint(b, docId)
+	b := []byte(docId)
 
 	// 从数据库删除该key
-	engine.dbs[shard].Delete(b[0:length])
+	engine.dbs[shard].Delete(b)
 }
 
 func (engine *Engine) persistentStorageInitWorker(shard int) {
 	engine.dbs[shard].ForEach(func(k, v []byte) error {
 		key, value := k, v
 		// 得到docID
-		docId, _ := binary.Uvarint(key)
+		docId := string(key)
 
 		// 得到data
 		buf := bytes.NewReader(value)

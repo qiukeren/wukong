@@ -1,8 +1,8 @@
 package core
 
 import (
-	"github.com/huichen/wukong/types"
-	"github.com/huichen/wukong/utils"
+	"github.com/qiukeren/wukong/types"
+	"github.com/qiukeren/wukong/utils"
 	"reflect"
 	"testing"
 )
